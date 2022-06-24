@@ -29,12 +29,34 @@ const SUSPENSE_CONFIG = {
   busyMinDurationMs: 700,
 }
 
-// 🐨 create a pokemonResourceCache object
 
-// 🐨 create a getPokemonResource function which accepts a name checks the cache
-// for an existing resource. If there is none, then it creates a resource
-// and inserts it into the cache. Finally the function should return the
-// resource.
+const pokemonContext = React.createContext()
+
+function PokemonCacheProvider({children, cacheTime = 5000}) {
+  const pokemonResourceCache = React.useRef({})
+  
+  function clearCachePokemon(pokemonName) {
+    delete pokemonResourceCache.current[pokemonName]
+  }
+
+  const getPokemonResource = React.useCallback((pokemonName) => {
+    let resource = pokemonResourceCache.current[pokemonName]
+    if (!resource) {
+      resource = createPokemonResource(pokemonName)
+      pokemonResourceCache.current[pokemonName] = resource
+      setTimeout(() => {
+        clearCachePokemon(pokemonName)
+      }, cacheTime);
+    }
+    return resource
+  }, [cacheTime])
+
+  return (
+    <pokemonContext.Provider value={getPokemonResource}>
+      {children}
+    </pokemonContext.Provider>
+  )
+}
 
 function createPokemonResource(pokemonName) {
   return createResource(fetchPokemon(pokemonName))
@@ -44,6 +66,7 @@ function App() {
   const [pokemonName, setPokemonName] = React.useState('')
   const [startTransition, isPending] = React.useTransition(SUSPENSE_CONFIG)
   const [pokemonResource, setPokemonResource] = React.useState(null)
+  const getPokemon = React.useContext(pokemonContext)
 
   React.useEffect(() => {
     if (!pokemonName) {
@@ -51,10 +74,9 @@ function App() {
       return
     }
     startTransition(() => {
-      // 🐨 change this to getPokemonResource instead
-      setPokemonResource(createPokemonResource(pokemonName))
+      setPokemonResource(getPokemon(pokemonName))
     })
-  }, [pokemonName, startTransition])
+  }, [pokemonName, startTransition, getPokemon])
 
   function handleSubmit(newPokemonName) {
     setPokemonName(newPokemonName)
@@ -88,4 +110,12 @@ function App() {
   )
 }
 
-export default App
+function AppWithProvider() {
+  return (
+    <PokemonCacheProvider>
+      <App />
+    </PokemonCacheProvider>
+  )
+}
+
+export default AppWithProvider
